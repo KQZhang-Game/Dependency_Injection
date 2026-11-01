@@ -1,5 +1,11 @@
 {
   "dependencies": {
+    "com.kaiqi.dependencyinjection": {
+      "version": "file:com.kaiqi.dependencyinjection",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {}
+    },
     "com.unity.collab-proxy": {
       "version": "2.12.4",
       "depth": 0,

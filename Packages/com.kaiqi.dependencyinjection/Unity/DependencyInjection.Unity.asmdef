@@ -1,0 +1,16 @@
+{
+    "name": "DependencyInjection.Unity",
+    "rootNamespace": "DependencyInjection",
+    "references": [
+        "GUID:7594fa5787199a341b83c3464e6557e0"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
