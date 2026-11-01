@@ -22,7 +22,18 @@ namespace DependencyInjection
         /// <summary>容器持有的注册表，业务代码通过它解析服务。</summary>
         public IServiceRegistry Registry { get; private set; }
 
-        private Injector injector;
+        /// <summary>
+        /// 容器实例。手工创建的对象需要注入时调用 InjectExternal；
+        /// 不要直接调用 Initialize / DisposeSceneServices，它们的时机由 Bootstrap 管理。
+        /// </summary>
+        public Injector Injector { get; private set; }
+
+        private static int initializeCount;
+
+        // 首场景的 sceneLoaded 在 Awake 之后派发，会与 Awake 里的初始化重复；
+        // 记录 Bootstrap 所在场景，跳过它自己的那一次回调。
+        private Scene initialScene;
+        private bool initialSceneEventHandled;
 
         private void Awake()
         {
@@ -33,15 +44,22 @@ namespace DependencyInjection
             }
 
             Instance = this;
+            initialScene = gameObject.scene;   // 必须在 DontDestroyOnLoad 之前取，之后对象会被移到常驻场景
             DontDestroyOnLoad(gameObject);
 
             var runtime = new UnityRuntimeAdapter();
 
+            // 只扫描直接引用 DependencyInjection 的程序集：写特性就必须引用它，
+            // 引用不了的程序集不可能声明 [Provide] / [Inject]，扫了也是白扫。
+            var scanSource = new ScannerScanSource(ScannerScanSource.ReferencesDependencyInjection);
+
             Registry = new ServiceRegistry(runtime);
-            injector = new Injector(Registry, runtime);
+            Injector = new Injector(Registry, runtime, scanSource);
 
             // 首个场景：场景对象此时都已实例化，就地完成一次初始化
-            injector.Initialize();
+            Debug.Log($"[DI] Initialize #{++initializeCount}（来源：{nameof(Awake)}）");
+            Injector.Initialize();
+            Debug.Log($"[DI] 扫描 {scanSource.ScannedAssemblyCount} 个程序集 / {scanSource.ScannedTypeCount} 个候选类型（{scanSource.LastScanMilliseconds} ms）");
 
             SceneManager.sceneLoaded += OnSceneLoaded;
         }
@@ -55,8 +73,17 @@ namespace DependencyInjection
         /// </summary>
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            injector.DisposeSceneServices();
-            injector.Initialize();
+            // 首场景已经在 Awake 里初始化过，这次回调要跳过，否则会重建一遍刚建好的 Scene 级服务
+            if (!initialSceneEventHandled && scene.handle == initialScene.handle)
+            {
+                initialSceneEventHandled = true;
+                Debug.Log("[DI] 跳过首场景的 sceneLoaded 回调（该场景已在 Awake 中初始化）");
+                return;
+            }
+
+            Injector.DisposeSceneServices();
+            Debug.Log($"[DI] Initialize #{++initializeCount}（来源：{nameof(OnSceneLoaded)}）");
+            Injector.Initialize();
         }
 
         private void OnDestroy()
@@ -65,7 +92,7 @@ namespace DependencyInjection
 
             if (Instance != this) return;
 
-            injector.DisposeSceneServices();
+            Injector.DisposeSceneServices();
             Instance = null;
         }
     }

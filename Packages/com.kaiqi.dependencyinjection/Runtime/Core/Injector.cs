@@ -33,10 +33,19 @@ namespace DependencyInjection
         IList<Type> initializationOrder = new List<Type>();
 
         public Injector(IServiceRegistry registry, IDependencyRuntimeAdapter runtime)
+            : this(registry, runtime, null) { }
+
+        /// <summary>
+        /// scanSource 为 null 时使用全量扫描。组合根可以传入带过滤器的 ScannerScanSource
+        /// 来收敛扫描范围，传进来的扫描源也决定本次装配的可见类型集合。
+        /// </summary>
+        public Injector(IServiceRegistry registry, IDependencyRuntimeAdapter runtime, IDependencyScanSource scanSource)
         {
             this.registry = registry;
             this.runtime = runtime;
-            graph = new DependencyGraph(runtime);
+            graph = scanSource == null
+                ? new DependencyGraph(runtime)
+                : new DependencyGraph(runtime, scanSource);
             memberInjector = new MemberInjector(registry, graph, runtime);
         }
 

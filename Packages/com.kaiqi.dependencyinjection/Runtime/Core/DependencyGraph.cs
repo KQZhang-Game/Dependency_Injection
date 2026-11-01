@@ -337,8 +337,9 @@ namespace DependencyInjection
             foreach (var node in inEdgeCounts.Keys)
             {
                 if (!TryGetScope(node, out var scope) || scope != E_ServiceType.Root) continue;
+                if (!dependencies.TryGetValue(node, out var deps)) continue;
 
-                foreach (var dependency in dependencies[node])
+                foreach (var dependency in deps)
                 {
                     if (TryGetScope(dependency, out var dependencyScope) && dependencyScope == E_ServiceType.Scene)
                         invalid.Add($"{node.FullName}（Root）依赖了 {dependency.FullName}（Scene）");

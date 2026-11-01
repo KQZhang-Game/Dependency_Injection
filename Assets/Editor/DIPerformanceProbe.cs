@@ -153,6 +153,26 @@ namespace DependencyInjection
                     injector.Initialize();
                     return injector.Nodes.Count();
                 });
+
+                // 过滤冷：每次新建扫描源，等价于冷扫描，但与 Scanner 的静态缓存无关。
+                // 这是 Bootstrap 实际走的路径，用来和上面的全量基线对比。
+                Measure("Injector.Initialize（过滤冷）", () =>
+                {
+                    var runtime = new UnityRuntimeAdapter();
+                    var scanSource = new ScannerScanSource(ScannerScanSource.ReferencesDependencyInjection);
+                    var injector = new Injector(new ServiceRegistry(runtime), runtime, scanSource);
+                    injector.Initialize();
+                    return injector.Nodes.Count();
+                });
+
+                // 打印过滤路径的实际扫描范围，用来核对收敛是否生效
+                var probeRuntime = new UnityRuntimeAdapter();
+                var probeSource = new ScannerScanSource(ScannerScanSource.ReferencesDependencyInjection);
+                var probeInjector = new Injector(new ServiceRegistry(probeRuntime), probeRuntime, probeSource);
+                probeInjector.Initialize();
+                Log($"[反射] 过滤扫描范围：{probeSource.ScannedAssemblyCount} 个程序集 / "
+                    + $"{probeSource.ScannedTypeCount} 个候选类型（{probeSource.LastScanMilliseconds} ms），"
+                    + $"节点 {probeInjector.Nodes.Count()} 个");
             }
             catch (Exception e)
             {
@@ -214,11 +234,10 @@ namespace DependencyInjection
             report.AppendLine("[ERROR] " + line);
         }
 
-        /// <summary>把本次测量结果写到桌面上的新 txt 文件。文件名带时间戳，不会覆盖旧报告。</summary>
+        /// <summary>把本次测量结果写到临时缓存目录下的新 txt 文件。文件名带时间戳，不会覆盖旧报告。</summary>
         private static void WriteReport()
         {
-            var desktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
-            var path = Path.Combine(desktop, $"DI_Performance_{DateTime.Now:yyyyMMdd_HHmmss}.txt");
+            var path = Path.Combine(Application.temporaryCachePath, $"DI_Performance_{DateTime.Now:yyyyMMdd_HHmmss}.txt");
 
             try
             {

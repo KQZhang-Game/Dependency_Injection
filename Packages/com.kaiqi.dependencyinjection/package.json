@@ -4,7 +4,6 @@
   "displayName": "Dependency Injection",
   "description": "轻量依赖注入容器：特性驱动装配、拓扑排序创建、场景对象注入、Scene/Root 双作用域。",
   "unity": "2022.3",
-  "unityRelease": "0f1",
   "keywords": [
     "dependency-injection",
     "di",
@@ -13,7 +12,9 @@
   "author": {
     "name": "kaiqi"
   },
-  "license": "MIT",
+  "documentationUrl": "https://github.com/KQZhang-Game/Dependency_Injection/blob/master/Packages/com.kaiqi.dependencyinjection/README.md",
+  "changelogUrl": "https://github.com/KQZhang-Game/Dependency_Injection/blob/master/Packages/com.kaiqi.dependencyinjection/CHANGELOG.md",
+  "licensesUrl": "https://github.com/KQZhang-Game/Dependency_Injection/blob/master/Packages/com.kaiqi.dependencyinjection/LICENSE.md",
   "dependencies": {},
   "samples": []
 }

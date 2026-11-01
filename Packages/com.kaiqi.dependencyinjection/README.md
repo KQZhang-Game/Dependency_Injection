@@ -13,12 +13,38 @@
 
 ## 安装
 
-本包为 UPM 内嵌包（embedded package），当前放在本项目的 `Packages/com.kaiqi.dependencyinjection`。
+本包为 UPM 包。分发方式有三种，按使用场景选择。
 
-在其他工程中使用时二选一：
+**方式一：UPM Git URL（推荐）**
 
-1. 把整个 `com.kaiqi.dependencyinjection` 目录复制到目标工程的 `Packages/` 下
-2. 在目标工程的 `Packages/manifest.json` 中添加本地路径依赖
+前提：包已推送到公开的 Git 仓库并打了 tag。
+
+1. `Window → Package Manager → + → Add package from git URL...`
+2. 填写下面的地址（包位于仓库子目录，必须带 `?path=`）：
+
+```text
+https://github.com/<USER>/<REPO>.git?path=/Packages/com.kaiqi.dependencyinjection#v0.1.0
+```
+
+也可以直接写进目标工程的 `Packages/manifest.json`：
+
+```json
+{
+  "dependencies": {
+    "com.kaiqi.dependencyinjection": "https://github.com/<USER>/<REPO>.git?path=/Packages/com.kaiqi.dependencyinjection#v0.1.0"
+  }
+}
+```
+
+注意事项：对方机器需要安装 git 并加入 PATH；建议用 tag 锁定版本；升级时要改 tag，或删除 `packages-lock.json` 中对应条目。
+
+**方式二：复制目录（离线兜底）**
+
+把整个 `com.kaiqi.dependencyinjection` 目录（含 `.meta`）复制到目标工程的 `Packages/` 下。
+
+**方式三：本地路径依赖**
+
+在目标工程的 `Packages/manifest.json` 中添加本地路径：
 
 ```json
 {
@@ -34,9 +60,9 @@
 |---|---|---|
 | `DependencyInjection` | Contracts / Attributes / Core | `noEngineReferences: true`，纯 C# |
 | `DependencyInjection.Unity` | `Bootstrap`、`UnityRuntimeAdapter` | 依赖 UnityEngine 与 `DependencyInjection` |
-| `DependencyInjection.Editor` | 测试与性能探针 | 仅 Editor 平台 |
+| `DependencyInjection.Editor` | 构建期校验测试 | 仅 Editor 平台 |
 
-使用方需要在 asmdef 的 References 里显式引用 `DependencyInjection`；需要 `Bootstrap` 或自定义适配层时再引用 `DependencyInjection.Unity`。
+使用方需要在 asmdef 的 References 里显式引用 `DependencyInjection`；需要 `Bootstrap` 或自定义适配层时再引用 `DependencyInjection.Unity`。`DependencyInjection` 与 `DependencyInjection.Unity` 已设置 `autoReferenced: true`，没有 asmdef 的工程（`Assembly-CSharp`）可直接使用。
 
 ## 快速开始
 
@@ -164,6 +190,15 @@ if (Bootstrap.Instance.Registry.TryGetValue(typeof(ServiceA), out var instance))
 
 注册表先查 `Scene` 再查 `Root`；重复注册同一类型会打印警告并覆盖。
 
+手工创建的对象（`Unregistered` 来源）需要注入时，用容器对实例执行成员注入：
+
+```csharp
+var host = new UnregisteredHost();
+Bootstrap.Instance.Injector.InjectExternal(host);
+```
+
+它只处理 `host` 自身类型上的 `[Inject]` 字段、属性与方法，依赖从注册表解析，解析失败直接抛异常；`host` 为 null 时抛 `ArgumentNullException`。`Injector` 由 `Bootstrap` 管理，请勿手动调用它的 `Initialize` / `DisposeSceneServices`。
+
 ## 构建期校验
 
 以下配置会在 `Injector.Initialize()` 抛出 `InvalidOperationException`，错误信息会列出具体类型：
@@ -184,7 +219,7 @@ Packages/com.kaiqi.dependencyinjection/
 │   ├── DependencyInjection.asmdef
 │   ├── Contracts/                 接口、枚举、生命周期契约
 │   ├── Attributes/                三个装配特性
-│   └── Core/                      Scanner、Sorter、ServiceRegistry、
+│   └── Core/                      Scanner、TypeScanner、Sorter、ServiceRegistry、
 │                                  DependencyGraph、Injector、MemberInjector
 ├── Unity/
 │   ├── DependencyInjection.Unity.asmdef
@@ -196,6 +231,8 @@ Packages/com.kaiqi.dependencyinjection/
 ```
 
 引擎与 Unity 的耦合点全部收敛在 `IDependencyRuntimeAdapter` 三个能力上（场景对象判定、场景查找、日志），因此 `Runtime` 可以设置 `noEngineReferences: true`，一旦有人误用 `UnityEngine` 会在编译期失败。自定义环境（编辑器工具、纯逻辑测试）可以替换成自己的适配实现，也可用 `IDependencyScanSource` 注入构造数据来隔离扫描。
+
+扫描范围由组合根决定：`Bootstrap` 传入 `ScannerScanSource.ReferencesDependencyInjection`，只扫描直接引用 `DependencyInjection` 程序集的程序集——要声明特性就必须引用特性类型，所以这个判断不会漏掉合法服务。`Scanner` 静态门面仍保留全量扫描，供性能探针做基线对比。启动日志会打印实际扫描到的程序集数与类型数，范围变化可直接观察。
 
 ## 测试
 
@@ -216,9 +253,8 @@ Measure Reflection Cost       扫描与装配耗时
 - `[Inject]` 标在没有 setter 的只读属性上会被静默跳过，请改用字段注入或补 setter
 - 场景里的 MonoBehaviour 服务实现 `IDisposableService` 时，过场景清理阶段实例已是 Unity 假 null，`Dispose` 不会被调用，应改在 `OnDestroy` 里释放
 - `InjectExternal` 按 `host.GetType()` 查找成员，子类实例不会注入基类上的 `[Inject]` 成员
-- 扫描范围是全 `AppDomain`，编辑器下约 150 个程序集，首次装配有秒级开销；可用 asmdef 缩小范围
+- 扫描只覆盖直接引用 `DependencyInjection` 的程序集：无 asmdef 的项目依赖框架程序集 `autoReferenced: true` 才能被扫到；运行时通过 `Assembly.Load` 晚加载的程序集也扫不到。扫描结果按扫描源缓存，过场景不重扫
 - IL2CPP 构建时被反射访问的成员需要 `link.xml` 保留
-- `Bootstrap` 未公开 `Injector`，`InjectExternal` 目前只适用于自建组合根（自行 `new Injector(registry, runtime)`）
 
 ## 许可
 
