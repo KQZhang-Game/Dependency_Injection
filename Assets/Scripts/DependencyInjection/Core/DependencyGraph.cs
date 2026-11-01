@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using UnityEngine;
 
 namespace DependencyInjection
 {
@@ -20,7 +19,13 @@ namespace DependencyInjection
         readonly Dictionary<Type, HashSet<Type>> outEdgeItems = new Dictionary<Type, HashSet<Type>>();
         readonly Dictionary<Type, int> inEdgeCounts = new Dictionary<Type, int>();
 
-        // 类型 -> 标注的 [ServiceScope]。由 Scanner 扫描一次，Build 不清空
+        // Unity 能力适配：场景对象判定、场景查找、日志
+        readonly IDependencyRuntimeAdapter runtime;
+
+        // 扫描数据来源。默认是 Scanner，测试可以替换成构造数据
+        readonly IDependencyScanSource scanSource;
+
+        // 类型 -> 标注的 [ServiceScope]。Build 不清空
         readonly Dictionary<Type, E_ServiceType> serviceTypeDict;
 
         // 节点 -> 实例来源。创建、注入、展示共用同一份判定，避免各写一套 if
@@ -39,9 +44,15 @@ namespace DependencyInjection
         readonly Dictionary<Type, List<PropertyInfo>> injectProperties = new Dictionary<Type, List<PropertyInfo>>();
         readonly Dictionary<Type, List<MethodInfo>> injectMethods = new Dictionary<Type, List<MethodInfo>>();
 
-        public DependencyGraph()
+        public DependencyGraph(IDependencyRuntimeAdapter runtime) : this(runtime, new ScannerScanSource())
         {
-            serviceTypeDict = Scanner.ScanServiceScopes();
+        }
+
+        public DependencyGraph(IDependencyRuntimeAdapter runtime, IDependencyScanSource scanSource)
+        {
+            this.runtime = runtime;
+            this.scanSource = scanSource;
+            serviceTypeDict = scanSource.ServiceScopes;
         }
 
         /// <summary>重建整张图，并在构建期把确定的配置错误直接抛出来。</summary>
@@ -85,13 +96,13 @@ namespace DependencyInjection
         /// </summary>
         private void ProvideDependencyEdges()
         {
-            foreach (var method in Scanner.ScanProvideMethods())
+            foreach (var method in scanSource.ProvideMethods)
             {
                 var serviceType = method.ReturnType;
                 if (serviceType == typeof(void)) continue;
 
                 if (provideMethods.ContainsKey(serviceType))
-                    Debug.LogWarning($"{serviceType.FullName} 存在多个 [Provide] 方法，后扫描到的将覆盖先扫描到的");
+                    runtime.LogWarning($"{serviceType.FullName} 存在多个 [Provide] 方法，后扫描到的将覆盖先扫描到的");
 
                 provideMethods[serviceType] = method;
                 var parameterTypes = method.GetParameters().Select(p => p.ParameterType).ToList();
@@ -116,7 +127,7 @@ namespace DependencyInjection
         {
             var conflicts = new List<string>();
 
-            foreach (var injectable in Scanner.ScanInjectableCtor())
+            foreach (var injectable in scanSource.InjectableConstructors)
             {
                 var injectableItemType = injectable.DeclaringType;
                 var parameterTypes = injectable.GetParameters().Select(p => p.ParameterType).ToList();
@@ -130,7 +141,7 @@ namespace DependencyInjection
                 }
 
                 if (injectCtors.ContainsKey(injectableItemType))
-                    Debug.LogWarning($"{injectableItemType.FullName} 存在多个 [Inject] 构造函数，后扫描到的将覆盖先扫描到的");
+                    runtime.LogWarning($"{injectableItemType.FullName} 存在多个 [Inject] 构造函数，后扫描到的将覆盖先扫描到的");
                 injectCtors[injectableItemType] = injectable;
                 dependencies[injectableItemType] = parameterTypes;
 
@@ -147,7 +158,7 @@ namespace DependencyInjection
             foreach (var entry in provideMethods)
             {
                 var hostType = entry.Value.DeclaringType;
-                if (typeof(MonoBehaviour).IsAssignableFrom(hostType)) continue;
+                if (runtime.IsSceneBehaviour(hostType)) continue;
                 if (!injectCtors.ContainsKey(hostType)) continue;
 
                 if (!outEdgeItems.ContainsKey(hostType)) outEdgeItems[hostType] = new HashSet<Type>();
@@ -163,7 +174,7 @@ namespace DependencyInjection
 
         private void FieldDependencyEdges()
         {
-            foreach (var injectable in Scanner.ScanInjectableField())
+            foreach (var injectable in scanSource.InjectableFields)
             {
                 var injectableItemType = injectable.DeclaringType;
                 var fieldType = injectable.FieldType;
@@ -178,7 +189,7 @@ namespace DependencyInjection
 
         private void PropertyDependencyEdges()
         {
-            foreach (var injectable in Scanner.ScanInjectableProperties())
+            foreach (var injectable in scanSource.InjectableProperties)
             {
                 var injectableItemType = injectable.DeclaringType;
                 var propertyType = injectable.PropertyType;
@@ -193,7 +204,7 @@ namespace DependencyInjection
 
         private void MethodDependencyEdges()
         {
-            foreach (var injectable in Scanner.ScanInjectableMethods())
+            foreach (var injectable in scanSource.InjectableMethods)
             {
                 var injectableItemType = injectable.DeclaringType;
                 foreach (var type in injectable.GetParameters().Select(p => p.ParameterType))
@@ -264,7 +275,7 @@ namespace DependencyInjection
             }
 
             if (externalHosts.Count > 0)
-                Debug.LogWarning(
+                runtime.LogWarning(
                     "以下类型有 [Inject] 成员，但既无 [Provide]、无 [Inject] 构造函数、也不是 MonoBehaviour，"
                     + "容器不会创建也不会注入它们：\n  "
                     + string.Join("\n  ", externalHosts.Select(t => t.FullName))
@@ -275,7 +286,7 @@ namespace DependencyInjection
         {
             if (provideMethods.ContainsKey(node)) return E_NodeKind.Provider;
             if (injectCtors.ContainsKey(node)) return E_NodeKind.Constructor;
-            if (typeof(MonoBehaviour).IsAssignableFrom(node)) return E_NodeKind.SceneBehaviour;
+            if (runtime.IsSceneBehaviour(node)) return E_NodeKind.SceneBehaviour;
             return E_NodeKind.Unregistered;
         }
 
@@ -294,7 +305,7 @@ namespace DependencyInjection
                 .Select(method => method.DeclaringType)
                 .Distinct()
                 .Where(hostType =>
-                    !typeof(MonoBehaviour).IsAssignableFrom(hostType)
+                    !runtime.IsSceneBehaviour(hostType)
                     && !injectCtors.ContainsKey(hostType)
                     && IsInjectionHost(hostType))
                 .ToList();

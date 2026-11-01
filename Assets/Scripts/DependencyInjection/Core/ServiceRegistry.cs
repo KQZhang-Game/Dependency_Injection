@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using UnityEngine;
 
 namespace DependencyInjection
 {
@@ -8,6 +7,12 @@ namespace DependencyInjection
     {
         private readonly Dictionary<Type, object> sceneRegistry = new Dictionary<Type, object>();
         private readonly Dictionary<Type, object> rootRegistry = new Dictionary<Type, object>();
+        private readonly IDependencyRuntimeAdapter runtime;
+
+        public ServiceRegistry(IDependencyRuntimeAdapter runtime)
+        {
+            this.runtime = runtime;
+        }
         public void Register(Type type, object instance, E_ServiceType serviceType)
         {
             switch (serviceType)
@@ -15,14 +20,14 @@ namespace DependencyInjection
                 case E_ServiceType.Scene:
                     if (sceneRegistry.ContainsKey(type))
                     {
-                        Debug.LogWarning($"{type.FullName}服务已存在，将覆盖旧实例");
+                        runtime.LogWarning($"{type.FullName}服务已存在，将覆盖旧实例");
                     }
                     sceneRegistry[type] = instance;
                     break;
                 case E_ServiceType.Root:
                     if (rootRegistry.ContainsKey(type))
                     {
-                        Debug.LogWarning($"{type.FullName}服务已存在，将覆盖旧实例");
+                        runtime.LogWarning($"{type.FullName}服务已存在，将覆盖旧实例");
                     }
                     rootRegistry[type] = instance;
                     break;

@@ -139,7 +139,8 @@ namespace DependencyInjection
                 // 冷：每次重建 Injector 前清空扫描缓存，包含完整的反射扫描
                 MeasureCold("Injector.Initialize（冷）", () =>
                 {
-                    var injector = new Injector(new ServiceRegistry());
+                    var runtime = new UnityRuntimeAdapter();
+                    var injector = new Injector(new ServiceRegistry(runtime), runtime);
                     injector.Initialize();
                     return injector.Nodes.Count();
                 });
@@ -147,7 +148,8 @@ namespace DependencyInjection
                 // 热：扫描缓存命中，只测依赖图构建 + 实例化 + 注入
                 Measure("Injector.Initialize（热）", () =>
                 {
-                    var injector = new Injector(new ServiceRegistry());
+                    var runtime = new UnityRuntimeAdapter();
+                    var injector = new Injector(new ServiceRegistry(runtime), runtime);
                     injector.Initialize();
                     return injector.Nodes.Count();
                 });

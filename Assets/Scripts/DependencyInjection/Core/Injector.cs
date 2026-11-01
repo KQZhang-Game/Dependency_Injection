@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using UnityEngine;
 
 namespace DependencyInjection
 {
@@ -20,6 +19,7 @@ namespace DependencyInjection
     public class Injector
     {
         readonly IServiceRegistry registry;
+        readonly IDependencyRuntimeAdapter runtime;
         readonly DependencyGraph graph;
         readonly MemberInjector memberInjector;
 
@@ -32,11 +32,12 @@ namespace DependencyInjection
 
         IList<Type> initializationOrder = new List<Type>();
 
-        public Injector(IServiceRegistry registry)
+        public Injector(IServiceRegistry registry, IDependencyRuntimeAdapter runtime)
         {
             this.registry = registry;
-            graph = new DependencyGraph();
-            memberInjector = new MemberInjector(registry, graph);
+            this.runtime = runtime;
+            graph = new DependencyGraph(runtime);
+            memberInjector = new MemberInjector(registry, graph, runtime);
         }
 
         public void Initialize()
@@ -128,7 +129,7 @@ namespace DependencyInjection
                 }
                 catch (Exception e)
                 {
-                    Debug.LogError($"{node.Name} 在 Dispose 时抛出异常：{e}");
+                    runtime.LogError($"{node.Name} 在 Dispose 时抛出异常：{e}");
                 }
             }
 
@@ -142,8 +143,8 @@ namespace DependencyInjection
         private object GetProviderHost(Type declaringType)
         {
             // Mono 宿主：场景里找，不缓存 —— 过场景后是新的场景对象，缓存会拿到已销毁的旧实例
-            if (typeof(MonoBehaviour).IsAssignableFrom(declaringType))
-                return UnityEngine.Object.FindFirstObjectByType(declaringType);
+            if (runtime.IsSceneBehaviour(declaringType))
+                return runtime.FindSceneObject(declaringType);
 
             // 普通类宿主：同一声明类型只创建一个，多个 [Provide] 方法共享同一个实例
             if (providerHosts.TryGetValue(declaringType, out var host) && host != null)

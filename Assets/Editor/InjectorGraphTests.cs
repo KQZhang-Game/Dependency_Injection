@@ -16,8 +16,9 @@ namespace DependencyInjection
             HostingProvider.InstanceCount = 0;
             ReadyService.ReadyCount = 0;
 
-            var registry = new ServiceRegistry();
-            var injector = new Injector(registry);
+            var runtime = new UnityRuntimeAdapter();
+            var registry = new ServiceRegistry(runtime);
+            var injector = new Injector(registry, runtime);
             injector.Initialize();
 
             Debug.Log("=== 依赖图可视化 ===\n" + injector.DescribeGraph());
@@ -134,8 +135,9 @@ namespace DependencyInjection
 
             try
             {
-                var registry = new ServiceRegistry();
-                var injector = new Injector(registry);
+                var runtime = new UnityRuntimeAdapter();
+                var registry = new ServiceRegistry(runtime);
+                var injector = new Injector(registry, runtime);
 
                 Debug.Log("=== 作用域预检（创建节点 -> 作用域）===\n" + DescribeScopes(injector));
 
@@ -285,8 +287,9 @@ namespace DependencyInjection
                     classB = go.GetComponent<ClassB>();
                 }
 
-                var registry = new ServiceRegistry();
-                var injector = new Injector(registry);
+                var runtime = new UnityRuntimeAdapter();
+                var registry = new ServiceRegistry(runtime);
+                var injector = new Injector(registry, runtime);
                 try
                 {
                     injector.Initialize();
@@ -369,8 +372,9 @@ namespace DependencyInjection
                 if (UnityEngine.Object.FindFirstObjectByType<EnvironmentSystem>() == null)
                     tempObjects.Add(NewHost<EnvironmentSystem>("[DI-Test] EnvironmentSystem"));
 
-                var registry = new ServiceRegistry();
-                var injector = new Injector(registry);
+                var runtime = new UnityRuntimeAdapter();
+                var registry = new ServiceRegistry(runtime);
+                var injector = new Injector(registry, runtime);
                 injector.Initialize();
 
                 Debug.Log("[销毁测试] 创建顺序: " + string.Join(" -> ", DisposableLeafService.Events));
@@ -441,8 +445,9 @@ namespace DependencyInjection
                     classB = go.GetComponent<ClassB>();
                 }
 
-                var registry = new ServiceRegistry();
-                var injector = new Injector(registry);
+                var runtime = new UnityRuntimeAdapter();
+                var registry = new ServiceRegistry(runtime);
+                var injector = new Injector(registry, runtime);
                 injector.Initialize();
 
                 var fieldCount = injector.InjectFields.Values.Sum(list => list.Count);

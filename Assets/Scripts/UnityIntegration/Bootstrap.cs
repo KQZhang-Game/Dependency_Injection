@@ -35,8 +35,10 @@ namespace DependencyInjection
             Instance = this;
             DontDestroyOnLoad(gameObject);
 
-            Registry = new ServiceRegistry();
-            injector = new Injector(Registry);
+            var runtime = new UnityRuntimeAdapter();
+
+            Registry = new ServiceRegistry(runtime);
+            injector = new Injector(Registry, runtime);
 
             // 首个场景：场景对象此时都已实例化，就地完成一次初始化
             injector.Initialize();

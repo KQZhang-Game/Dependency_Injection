@@ -14,15 +14,17 @@ namespace DependencyInjection
     {
         readonly IServiceRegistry registry;
         readonly DependencyGraph graph;
+        readonly IDependencyRuntimeAdapter runtime;
 
         // 本次 Initialize 真正创建并注册的节点。Root 服务跨场景复用时不在这个集合里，
         // 注入与就绪回调据此跳过，避免对同一个实例重复注入、重复回调。
         readonly HashSet<Type> createdThisRound = new HashSet<Type>();
 
-        public MemberInjector(IServiceRegistry registry, DependencyGraph graph)
+        public MemberInjector(IServiceRegistry registry, DependencyGraph graph, IDependencyRuntimeAdapter runtime)
         {
             this.registry = registry;
             this.graph = graph;
+            this.runtime = runtime;
         }
 
         /// <summary>开始新的一轮装配，清掉上一轮的创建记录。</summary>
@@ -100,7 +102,7 @@ namespace DependencyInjection
                     yield break;
 
                 case E_NodeKind.SceneBehaviour:
-                    foreach (var behaviour in UnityEngine.Object.FindObjectsByType(hostType, UnityEngine.FindObjectsSortMode.None))
+                    foreach (var behaviour in runtime.FindSceneObjects(hostType))
                         yield return behaviour;
                     yield break;
             }
