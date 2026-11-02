@@ -66,9 +66,11 @@ https://github.com/<USER>/<REPO>.git?path=/Packages/com.kaiqi.dependencyinjectio
 
 ## 快速开始
 
-**1. 场景里放引导器**
+**1. 引导器（自动挂载）**
 
-在第一个场景创建一个空 GameObject，挂上 `Bootstrap`。它标记了 `[DefaultExecutionOrder(-10000)]` 且 `DontDestroyOnLoad`，只需放一次，后续场景不要再放。
+`Bootstrap` 标记了 `[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]`，进入 Play 时如果场景里没有它，会自动创建一个名为 `[DI] Bootstrap` 的常驻对象（`DontDestroyOnLoad`），不需要手动往场景里拖。
+
+想显式控制挂载时机，也可以在第一个场景放一个空 GameObject 挂上 `Bootstrap`：自动挂载会检测到已有实例并跳过。后续场景不要再放，否则会被自动逻辑销毁多余的那个。
 
 **2. 声明服务**
 
@@ -175,7 +177,7 @@ public class SceneService : IDisposableService
 }
 ```
 
-`IServiceReady` 的回调发生在 `Bootstrap.Awake` 内部，早于其他 MonoBehaviour 的 `Awake`，因此只应操作 DI 服务。只有服务与注入宿主会被回调；没有任何 `[Inject]` 成员的 MonoBehaviour 不在依赖图里。
+`IServiceReady` 的回调在每次装配结束时触发：手动挂载时发生在 `Bootstrap.Awake` 内部，早于其他 MonoBehaviour 的 `Awake`；自动挂载时发生在 `AfterSceneLoad`，晚于场景对象的 `Awake`、早于 `Start`。两种情况都只应操作 DI 服务。只有服务与注入宿主会被回调；没有任何 `[Inject]` 成员的 MonoBehaviour 不在依赖图里。
 
 ## 解析服务
 

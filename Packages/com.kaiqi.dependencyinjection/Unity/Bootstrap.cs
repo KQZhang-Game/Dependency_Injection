@@ -11,7 +11,9 @@ namespace DependencyInjection
     /// - 之后每次新场景加载完成，先按反拓扑序销毁上一个场景的 Scene 级服务，再为新场景重建；
     /// - Root 级服务跨场景保留，不参与清理。
     ///
-    /// 使用约定：Bootstrap 只放在第一个场景里，后续场景不要再放；
+    /// 默认自动挂载：进入 Play 时若场景里没有 Bootstrap，会新建一个常驻实例，
+    /// 使用者不需要手动往场景里拖。手动挂载时自动逻辑会检测到已有实例并跳过，二者不会重复。
+    ///
     /// 新场景中的脚本不要在 Awake 里访问 DI 服务（那时注入还没执行），用注入字段或 Start。
     /// </summary>
     [DefaultExecutionOrder(-10000)]
@@ -34,6 +36,25 @@ namespace DependencyInjection
         // 记录 Bootstrap 所在场景，跳过它自己的那一次回调。
         private Scene initialScene;
         private bool initialSceneEventHandled;
+
+        /// <summary>
+        /// 自动挂载：进入 Play 后若场景里没有 Bootstrap，就新建一个常驻对象，
+        /// 使用者不必手动把它拖进场景。
+        ///
+        /// 用 AfterSceneLoad 而不是 BeforeSceneLoad：BeforeSceneLoad 时首个场景的对象还没实例化，
+        /// 这时初始化既找不到场景对象，随后首个场景的 sceneLoaded 还会再重建一遍。
+        /// AfterSceneLoad 时首个场景已经加载完成；若它的 sceneLoaded 尚未派发，
+        /// OnSceneLoaded 里的首场景跳过逻辑也会拦住重复初始化。
+        /// </summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void EnsureBootstrap()
+        {
+            // 场景里手工挂过：Awake 已完成初始化，不要再建第二个
+            if (Instance != null) return;
+
+            var go = new GameObject("[DI] Bootstrap");
+            go.AddComponent<Bootstrap>();
+        }
 
         private void Awake()
         {
